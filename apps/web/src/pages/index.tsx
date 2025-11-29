@@ -5,16 +5,18 @@ import { Menu, Box, X } from "lucide-react";
 
 import { FileInfoPanel } from "@/components/common/file-info";
 import { PluginsConfigModal } from "@/components/plugins-config";
+import { findPluginIdForFile, DEFAULT_PLUGINS } from "@/config/plugins";
+import { CodeViewer } from "@/components/viewers/code-viewer";
+import { loadPluginsConfig } from "@/components/plugins-config";
 
 export default function IndexPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isPluginsConfigOpen, setIsPluginsConfigOpen] = useState(false);
 
   const [wasmStatus, setWasmStatus] = useState<"loading" | "ready" | "error">(
     "loading",
   );
-  const [analysisResult, setAnalysisResult] = useState<string | null>(null);
+  const [analysisResult, setAnalysisResult] = useState<any | null>(null);
   const workerRef = useRef<Worker | null>(null);
 
   useEffect(() => {
@@ -34,24 +36,63 @@ export default function IndexPage() {
     return () => workerRef.current?.terminate();
   }, []);
 
-  // ファイルが変更されたらWorkerに投げる
   useEffect(() => {
-    if (!selectedFile) {
+    if (!selectedFile || !workerRef.current || wasmStatus !== "ready") return;
+
+    // 1. 画像はスキップ
+    if (selectedFile.type.startsWith("image/")) return;
+
+    // 2. プラグインを探す
+    // ユーザー設定(localStorage)とデフォルトをマージして検索
+    const userPlugins = loadPluginsConfig();
+    const allPlugins = [...DEFAULT_PLUGINS, ...userPlugins];
+
+    const pluginId = findPluginIdForFile(selectedFile.name);
+    const targetPlugin = allPlugins.find((p) => p.id === pluginId);
+
+    if (targetPlugin) {
       setAnalysisResult(null);
-
-      return;
-    }
-
-    // 画像以外ならWasmで処理
-    if (
-      !selectedFile.type.startsWith("image/") &&
-      wasmStatus === "ready" &&
-      workerRef.current
-    ) {
-      setAnalysisResult(null); // 前の結果をクリア
-      workerRef.current.postMessage({ file: selectedFile });
+      // プラグイン情報ごとWorkerに投げる！
+      workerRef.current.postMessage({
+        file: selectedFile,
+        plugin: targetPlugin,
+      });
+    } else {
+      console.warn("No plugin found for:", selectedFile.name);
+      // プラグインが見つからない場合のフォールバック（HexViewerなど）へ
     }
   }, [selectedFile, wasmStatus]);
+
+  const renderContent = () => {
+    if (!selectedFile) return <div className="...">No file selected</div>;
+
+    // A. 画像 (Web Native)
+    if (selectedFile.type.startsWith("image/")) {
+      return (
+        <img
+          alt={selectedFile.name}
+          className="force-sdr ..."
+          src={URL.createObjectURL(selectedFile)}
+        />
+      );
+    }
+
+    // B. Workerからの解析結果待ち
+    if (!analysisResult) {
+      return <div className="...">Processing...</div>;
+    }
+
+    // C. 解析結果の表示 (タイプ別分岐)
+    switch (analysisResult.type) {
+      case "text":
+        return <CodeViewer content={analysisResult.payload.content} />;
+
+      // 将来ここに追加: case 'tree': return <TreeViewer ... />
+
+      default:
+        return <div>Unknown Result Type: {analysisResult.type}</div>;
+    }
+  };
 
   return (
     <HeroUIProvider>
@@ -79,20 +120,7 @@ export default function IndexPage() {
           <div className="flex-1 flex items-center justify-center p-4 overflow-auto">
             {selectedFile ? (
               <div className="w-full h-full flex items-center justify-center">
-                {selectedFile.type.startsWith("image/") ? (
-                  <img
-                    alt="Preview"
-                    //NOTE: HDR画像をアップロードされるとSafariでアニメーションしなくなるため，SDRにする。
-                    //NOTE: 将来的にはなんとかしたいところ・・・
-                    className="max-w-full max-h-full object-contain shadow-lg rounded-lg bg-white force-sdr"
-                    src={URL.createObjectURL(selectedFile)}
-                  />
-                ) : (
-                  <div className="text-center text-gray-500">
-                    <p>Processing with Wasm...</p>
-                    <p className="text-sm mt-2">{selectedFile.name}</p>
-                  </div>
-                )}
+                {renderContent()}
               </div>
             ) : (
               <div className="text-gray-400 flex flex-col items-center">

@@ -26,7 +26,6 @@ export default function PluginsConfigModal({
   const { isOpen, onOpen, onClose, onOpenChange } = useDisclosure();
 
   const [plugins, setPlugins] = useState<PluginConfig[]>([]);
-  const [hasChanges, setHasChanges] = useState(false);
 
   // 初期読み込み
   useEffect(() => {
@@ -42,7 +41,6 @@ export default function PluginsConfigModal({
     };
 
     setPlugins((prev) => [...prev, newPlugin]);
-    setHasChanges(true);
   }, []);
 
   // プラグインのフィールドを更新
@@ -51,7 +49,6 @@ export default function PluginsConfigModal({
       setPlugins((prev) =>
         prev.map((p) => (p.id === id ? { ...p, [field]: value } : p)),
       );
-      setHasChanges(true);
     },
     [],
   );
@@ -59,7 +56,6 @@ export default function PluginsConfigModal({
   // プラグインを削除
   const handleRemove = useCallback((id: string) => {
     setPlugins((prev) => prev.filter((p) => p.id !== id));
-    setHasChanges(true);
   }, []);
 
   // 保存
@@ -71,15 +67,8 @@ export default function PluginsConfigModal({
 
     savePluginsConfig(validPlugins);
     setPlugins(validPlugins);
-    setHasChanges(false);
     onClose();
-  }, [plugins]);
-
-  // リセット（保存済みの状態に戻す）
-  const handleReset = useCallback(() => {
-    setPlugins(loadPluginsConfig());
-    setHasChanges(false);
-  }, []);
+  }, [plugins, onClose]);
 
   return (
     <>
