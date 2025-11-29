@@ -5,10 +5,45 @@ import { Menu, Box, X, Binary } from "lucide-react";
 
 import { FileInfoPanel } from "@/components/common/file-info";
 import { PluginsConfigModal } from "@/components/plugins-config";
-import { findPluginIdForFile, DEFAULT_PLUGINS } from "@/config/plugins";
+import { findPluginIdForFile, DEFAULT_PLUGINS, isWorkerRequired } from "@/config/plugins";
 import { CodeViewer } from "@/components/viewers/code-viewer";
 import { loadPluginsConfig } from "@/components/plugins-config";
 import { HexViewer } from "@/components/viewers/hex";
+import { FileNode } from "@/types/file-tree";
+import { FileTreeViewer } from "@/components/viewers/file-tree";
+
+const MOCK_ARCHIVE_DATA: FileNode = {
+  name: "root",
+  type: "directory",
+  children: [
+    { name: "README.md", type: "file", size: 1240 },
+    { name: "package.json", type: "file", size: 850 },
+    {
+      name: "src",
+      type: "directory",
+      children: [
+        { name: "main.cpp", type: "file", size: 4500 },
+        { name: "utils.ts", type: "file", size: 2300 },
+        {
+          name: "components",
+          type: "directory",
+          children: [
+            { name: "Header.tsx", type: "file", size: 1500 },
+            { name: "Footer.tsx", type: "file", size: 1200 },
+          ],
+        },
+      ],
+    },
+    {
+      name: "public",
+      type: "directory",
+      children: [
+        { name: "favicon.ico", type: "file", size: 15400 },
+        { name: "hero.png", type: "file", size: 245000 },
+      ],
+    },
+  ],
+};
 
 export default function IndexPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -41,8 +76,8 @@ export default function IndexPage() {
   useEffect(() => {
     if (!selectedFile || !workerRef.current || wasmStatus !== "ready") return;
 
-    // 1. 画像はスキップ
-    if (selectedFile.type.startsWith("image/")) return;
+    // 1. プラグイン処理が必要か確認
+    if (!isWorkerRequired(selectedFile)) return;
 
     // 2. プラグインを探す
     // ユーザー設定(localStorage)とデフォルトをマージして検索
@@ -67,6 +102,15 @@ export default function IndexPage() {
 
   const renderContent = () => {
     if (!selectedFile) return <div className="...">No file selected</div>;
+
+    // 1. テスト用: ZIP/ISOならダミーツリーを表示
+    console.log(selectedFile);
+    if (
+      selectedFile.name.endsWith(".zip") ||
+      selectedFile.name.endsWith(".iso")
+    ) {
+      return <FileTreeViewer root={MOCK_ARCHIVE_DATA} />;
+    }
 
     // A. 画像 (Web Native)
     if (selectedFile.type.startsWith("image/")) {
@@ -168,13 +212,9 @@ export default function IndexPage() {
                     className="max-w-full max-h-full object-contain shadow-lg rounded-lg bg-white force-sdr"
                     src={URL.createObjectURL(selectedFile)}
                   />
-                ) : analysisResult ? (
+                ) : (
                   /* Wasm解析結果の表示 (Text/Treeなど) */
                   renderContent()
-                ) : (
-                  <div className="text-center text-gray-500">
-                    <p>Processing...</p>
-                  </div>
                 )}
               </div>
             ) : (

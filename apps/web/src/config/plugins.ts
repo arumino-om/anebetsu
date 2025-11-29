@@ -28,3 +28,13 @@ export const findPluginIdForFile = (fileName: string): string | null => {
 
   return EXTENSION_MAP[ext] || null;
 };
+
+export const isWorkerRequired = (file: File): boolean => {
+  if (file.type.startsWith("image/")) {
+    return false;
+  }
+
+  const pluginId = findPluginIdForFile(file.name);
+
+  return pluginId !== null;
+};
