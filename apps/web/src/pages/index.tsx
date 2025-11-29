@@ -1,21 +1,69 @@
-import { useState } from "react";
-import { Button, useDisclosure, HeroUIProvider } from "@heroui/react";
+/* eslint-disable no-console */
+import { useEffect, useRef, useState } from "react";
+import { Button, HeroUIProvider } from "@heroui/react";
 import { Menu, Box, X } from "lucide-react";
 
 import { FileInfoPanel } from "@/components/common/file-info";
+import { PluginsConfigModal } from "@/components/plugins-config";
 
 export default function IndexPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isPluginsConfigOpen, setIsPluginsConfigOpen] = useState(false);
+
+  const [wasmStatus, setWasmStatus] = useState<"loading" | "ready" | "error">(
+    "loading",
+  );
+  const [analysisResult, setAnalysisResult] = useState<string | null>(null);
+  const workerRef = useRef<Worker | null>(null);
+
+  useEffect(() => {
+    workerRef.current = new Worker(
+      new URL("../workers/file-processor.worker.ts", import.meta.url),
+      { type: "classic" },
+    );
+
+    workerRef.current.onmessage = (e) => {
+      const { type, payload } = e.data;
+
+      if (type === "READY") setWasmStatus("ready");
+      if (type === "RESULT") setAnalysisResult(payload);
+      if (type === "ERROR") console.error(payload);
+    };
+
+    return () => workerRef.current?.terminate();
+  }, []);
+
+  // ファイルが変更されたらWorkerに投げる
+  useEffect(() => {
+    if (!selectedFile) {
+      setAnalysisResult(null);
+
+      return;
+    }
+
+    // 画像以外ならWasmで処理
+    if (
+      !selectedFile.type.startsWith("image/") &&
+      wasmStatus === "ready" &&
+      workerRef.current
+    ) {
+      setAnalysisResult(null); // 前の結果をクリア
+      workerRef.current.postMessage({ file: selectedFile });
+    }
+  }, [selectedFile, wasmStatus]);
 
   return (
     <HeroUIProvider>
       <div className="flex h-screen w-screen overflow-hidden bg-white">
-        <div className="hidden md:flex w-80 flex-col border-r border-gray-200 p-6 bg-white z-20 shadow-sm">
+        {/* PC用画面 */}
+        <div className="hidden md:flex w-80 flex-col border-r border-gray-200 p-6 bg-white z-20 shadow-sm gap-3">
           <FileInfoPanel file={selectedFile} onFileSelect={setSelectedFile} />
+          <PluginsConfigModal buttonText="Configure Plugins" />
         </div>
 
         <div className="flex-1 relative flex flex-col bg-gray-50/50">
+          {/* スマホ用ヘッダー */}
           <div className="md:hidden flex items-center justify-between p-4 bg-white border-b border-gray-200 z-10">
             <span className="font-bold text-lg">anebetsu</span>
             <Button
@@ -27,13 +75,16 @@ export default function IndexPage() {
             </Button>
           </div>
 
+          {/* プレビュー画面 */}
           <div className="flex-1 flex items-center justify-center p-4 overflow-auto">
             {selectedFile ? (
               <div className="w-full h-full flex items-center justify-center">
                 {selectedFile.type.startsWith("image/") ? (
                   <img
                     alt="Preview"
-                    className="max-w-full max-h-full object-contain shadow-lg rounded-lg bg-white"
+                    //NOTE: HDR画像をアップロードされるとSafariでアニメーションしなくなるため，SDRにする。
+                    //NOTE: 将来的にはなんとかしたいところ・・・
+                    className="max-w-full max-h-full object-contain shadow-lg rounded-lg bg-white force-sdr"
                     src={URL.createObjectURL(selectedFile)}
                   />
                 ) : (
@@ -52,6 +103,7 @@ export default function IndexPage() {
           </div>
         </div>
 
+        {/* スマホ用メニュー */}
         <button
           className={`
             fixed inset-0 bg-black/40 z-40 md:hidden transition-opacity duration-300 ease-out
@@ -68,15 +120,9 @@ export default function IndexPage() {
             ${isMenuOpen ? "translate-y-0" : "translate-y-full"}
           `}
         >
-          <button
-            className="w-full flex justify-center mb-4"
-            onClick={() => setIsMenuOpen(false)}
-          >
-            <div className="w-12 h-1.5 bg-gray-200 rounded-full cursor-pointer" />
-          </button>
-
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-lg font-bold">File Menu</h2>
+            <PluginsConfigModal buttonText="Configure Plugins" />
             <Button
               isIconOnly
               size="sm"
