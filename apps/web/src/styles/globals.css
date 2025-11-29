@@ -1,3 +1,10 @@
 @import "tailwindcss";
 
+@layer utilities {
+  .force-sdr {
+    /* HDRコンテンツをSDRの範囲に制限する */
+    dynamic-range-limit: standard;
+  }
+}
+
 @config "../../tailwind.config.js"
