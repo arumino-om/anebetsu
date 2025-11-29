@@ -4,6 +4,28 @@ import type {
   Plugin,
 } from "../types/plugin";
 
+interface WasmModule {
+  // memory allocation helpers exposed by Emscripten/wasm build
+  _malloc: (size: number) => number;
+  _free: (ptr: number) => void;
+  HEAPU8: Uint8Array;
+
+  // plugin entry points (one of these is expected)
+  process_binary?: (ptr: number, size: number) => string;
+  process?: (text: string) => string;
+  process_file?: (path: string) => string;
+
+  // Emscripten FS and WORKERFS for file mounting
+  FS: {
+    mkdir: (path: string) => void;
+    mount: (type: unknown, opts: unknown, mountPoint: string) => void;
+  };
+  WORKERFS: unknown;
+
+  // allow other properties to be present
+  [key: string]: unknown;
+}
+
 // 一度読み込んだプラグインはMapで保持する
 const moduleCache = new Map<string, unknown>();
 
@@ -37,19 +59,56 @@ async function runPlugin(
   plugin: Plugin,
   file: File,
 ): Promise<AnebetsuPluginResult> {
-  const wasmModule = moduleCache.get(plugin.id) as Record<string, unknown>;
+  const wasmModule = moduleCache.get(plugin.id) as WasmModule;
 
   const arrayBuffer = await file.arrayBuffer();
+  const fileSize = arrayBuffer.byteLength;
   const uint8Array = new Uint8Array(arrayBuffer);
+  let jsonResult;
 
-  //TODO: バイナリデータをそのまま渡す方法があればそちらに変更する
-  const dataString = new TextDecoder().decode(uint8Array);
+  if (wasmModule.process_file) {
+    const mountDir = `/work-${Date.now()}`; // 被らないようにユニークな名前で
 
-  if (typeof wasmModule.process !== "function") {
-    throw new Error("Plugin does not have a 'process' function.");
+    try {
+      wasmModule.FS.mkdir(mountDir);
+    } catch (e) {
+      /* すでにあったら無視 */
+    }
+
+    wasmModule.FS.mount(
+      wasmModule.WORKERFS,
+      {
+        files: [file],
+      },
+      mountDir,
+    );
+
+    const filePath = `${mountDir}/${file.name}`;
+
+    jsonResult = wasmModule.process_file(filePath);
+  } else if (wasmModule.process_binary) {
+    // Wasmメモリを確保 (malloc)
+    const ptr = wasmModule._malloc(fileSize);
+
+    try {
+      // 確保したメモリにファイルデータを書き込む
+      wasmModule.HEAPU8.set(uint8Array, ptr);
+
+      // C++関数を実行 (ポインタとサイズを渡す)
+      jsonResult = wasmModule.process_binary(ptr, fileSize);
+    } finally {
+      // 【重要】使い終わったメモリは必ず解放する
+      wasmModule._free(ptr);
+    }
+  } else if (wasmModule.process) {
+    const textData = new TextDecoder().decode(uint8Array);
+
+    jsonResult = wasmModule.process(textData);
+  } else {
+    throw new Error(
+      "Plugin does not have 'process' or 'process_binary' function.",
+    );
   }
-
-  const jsonResult = wasmModule.process(dataString) as string;
   const result = JSON.parse(jsonResult);
 
   return result;

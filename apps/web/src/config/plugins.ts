@@ -7,6 +7,11 @@ export const DEFAULT_PLUGINS: PluginConfig[] = [
     url: "/wasm/text-viewer.js", // publicフォルダのパス
     entryFunction: "createTextViewerPlugin", // C++の EXPORT_NAME
   },
+  {
+    id: "archive-viewer-v1",
+    url: "/plugins/archive-viewer/plugin.js",
+    entryFunction: "createArchivePlugin",
+  },
 ];
 
 //TODO: 将来的にユーザー設定可能にする
@@ -21,6 +26,10 @@ export const EXTENSION_MAP: Record<string, string> = {
   hpp: "text-viewer-v1",
   log: "text-viewer-v1",
   csv: "text-viewer-v1",
+  zip: "archive-viewer-v1",
+  jar: "archive-viewer-v1", // Java Archiveも中身はZIP
+  apk: "archive-viewer-v1", // Android Appも中身はZIP
+  docx: "archive-viewer-v1", // Officeファイルも中身はZIP
 };
 
 export const findPluginIdForFile = (fileName: string): string | null => {

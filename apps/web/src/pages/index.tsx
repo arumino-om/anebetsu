@@ -5,7 +5,11 @@ import { Menu, Box, X, Binary } from "lucide-react";
 
 import { FileInfoPanel } from "@/components/common/file-info";
 import { PluginsConfigModal } from "@/components/plugins-config";
-import { findPluginIdForFile, DEFAULT_PLUGINS, isWorkerRequired } from "@/config/plugins";
+import {
+  findPluginIdForFile,
+  DEFAULT_PLUGINS,
+  isWorkerRequired,
+} from "@/config/plugins";
 import { CodeViewer } from "@/components/viewers/code-viewer";
 import { loadPluginsConfig } from "@/components/plugins-config";
 import { HexViewer } from "@/components/viewers/hex";
@@ -103,15 +107,6 @@ export default function IndexPage() {
   const renderContent = () => {
     if (!selectedFile) return <div className="...">No file selected</div>;
 
-    // 1. テスト用: ZIP/ISOならダミーツリーを表示
-    console.log(selectedFile);
-    if (
-      selectedFile.name.endsWith(".zip") ||
-      selectedFile.name.endsWith(".iso")
-    ) {
-      return <FileTreeViewer root={MOCK_ARCHIVE_DATA} />;
-    }
-
     // A. 画像 (Web Native)
     if (selectedFile.type.startsWith("image/")) {
       return (
@@ -134,6 +129,10 @@ export default function IndexPage() {
         return <CodeViewer content={analysisResult.payload.content} />;
 
       // 将来ここに追加: case 'tree': return <TreeViewer ... />
+      case "tree":
+        console.log("Archive Tree:", analysisResult);
+
+        return <FileTreeViewer root={analysisResult.payload.root} />;
 
       default:
         return <div>Unknown Result Type: {analysisResult.type}</div>;

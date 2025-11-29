@@ -83,3 +83,35 @@ namespace anebetsu {
     EMSCRIPTEN_BINDINGS(anebetsu_plugin) { \
         emscripten::function("process", FUNC_NAME); \
     }
+
+/**
+ * @brief プラグインのエントリポイント(バイナリ処理)を定義するマクロ
+ * @param FUNC_NAME プラグインの処理関数名
+ * @code
+ * // 使用例:
+ * std::string my_process(uintptr_t ptr, size_t size) {
+ *     return anebetsu::return_text(data);
+ * }
+ * ANEBETSU_PLUGIN(my_process)
+ * @endcode
+ */
+#define ANEBETSU_BINARY_PLUGIN(FUNC_NAME) \
+    EMSCRIPTEN_BINDINGS(anebetsu_plugin) { \
+        emscripten::function("process_binary", FUNC_NAME, emscripten::allow_raw_pointers()); \
+    }
+
+/**
+ * @brief プラグインのエントリポイント(ファイル処理)を定義するマクロ
+ * @param FUNC_NAME プラグインの処理関数名
+ * @code
+ * // 使用例:
+ * std::string my_process(std::string filename) {
+ *     return anebetsu::return_text(data);
+ * }
+ * ANEBETSU_PLUGIN(my_process)
+ * @endcode
+ */
+#define ANEBETSU_FILE_PLUGIN(FUNC_NAME) \
+    EMSCRIPTEN_BINDINGS(anebetsu_plugin) { \
+        emscripten::function("process_file", FUNC_NAME); \
+    }
