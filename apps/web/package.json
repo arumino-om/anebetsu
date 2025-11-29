@@ -4,7 +4,7 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host 0.0.0.0",
     "build": "tsc && vite build",
     "lint": "eslint --fix",
     "preview": "vite preview"
@@ -17,6 +17,7 @@
     "@heroui/kbd": "2.2.22",
     "@heroui/link": "2.2.23",
     "@heroui/navbar": "2.2.25",
+    "@heroui/react": "^2.8.5",
     "@heroui/snippet": "2.2.28",
     "@heroui/switch": "2.2.24",
     "@heroui/system": "2.4.23",
@@ -28,6 +29,7 @@
     "@tailwindcss/vite": "4.1.11",
     "clsx": "2.1.1",
     "framer-motion": "11.18.2",
+    "lucide-react": "^0.555.0",
     "react": "18.3.1",
     "react-dom": "18.3.1",
     "react-router-dom": "6.23.0",
