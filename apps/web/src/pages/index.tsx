@@ -158,7 +158,10 @@ export default function IndexPage() {
               <div className="w-full h-full flex items-center justify-center">
                 {/* ★ 分岐ロジック: バイナリモードなら最優先で表示 */}
                 {isBinaryMode ? (
-                  <HexViewer file={selectedFile} />
+                  <HexViewer
+                    key={selectedFile.name + selectedFile.lastModified}
+                    file={selectedFile}
+                  />
                 ) : selectedFile.type.startsWith("image/") ? (
                   <img
                     alt="Preview"
