@@ -3,56 +3,55 @@ import type {
   AnebetsuWorkerMessage,
   Plugin,
 } from "../types/plugin";
+import type { WasmModule } from "./types";
 
-interface WasmModule {
-  // memory allocation helpers exposed by Emscripten/wasm build
-  _malloc: (size: number) => number;
-  _free: (ptr: number) => void;
-  HEAPU8: Uint8Array;
-
-  // plugin entry points (one of these is expected)
-  process_binary?: (ptr: number, size: number) => string;
-  process?: (text: string) => string;
-  process_file?: (path: string) => string;
-
-  // Emscripten FS and WORKERFS for file mounting
-  FS: {
-    mkdir: (path: string) => void;
-    mount: (type: unknown, opts: unknown, mountPoint: string) => void;
-  };
-  WORKERFS: unknown;
-
-  // allow other properties to be present
-  [key: string]: unknown;
-}
+import { process_binary } from "./processors/binary";
+import { process_file } from "./processors/file";
+import { process_text } from "./processors/text";
 
 // 一度読み込んだプラグインはMapで保持する
 const moduleCache = new Map<string, unknown>();
 
 async function loadPlugins(plugin: Plugin): Promise<void> {
-  importScripts(plugin.url);
+  // ES Module Workerでは importScripts() が使えないため、
+  // fetchでスクリプトを取得し、スクリプトをBlobとして動的importする
+  const response = await fetch(plugin.url);
+  const scriptText = await response.text();
 
-  // グローバルからエントリ関数を探す
-  const factoryFunc = (self as unknown as Record<string, unknown>)[
-    plugin.entryFunction
-  ] as ((options: unknown) => Promise<unknown>) | undefined;
+  // Emscriptenが生成するコードは `var XXX = (()=>{...})();` という形式で
+  // グローバル変数に代入する。これをES Module形式に変換してexportする
+  const wrappedScript = `${scriptText}\nexport default ${plugin.entryFunction};`;
+  const blob = new Blob([wrappedScript], { type: "application/javascript" });
+  const blobUrl = URL.createObjectURL(blob);
 
-  if (typeof factoryFunc !== "function") {
-    throw new Error(
-      `Entry function "${plugin.entryFunction}" not found in global scope. Check EXPORT_NAME.`,
-    );
+  try {
+    const module = await import(/* @vite-ignore */ blobUrl);
+    const factoryFunc = module.default as (
+      options: unknown,
+    ) => Promise<unknown>;
+
+    if (typeof factoryFunc !== "function") {
+      throw new Error(
+        `Entry function "${plugin.entryFunction}" not found. Check EXPORT_NAME.`,
+      );
+    }
+
+    // Wasmインスタンス化
+    const moduleInstance = await factoryFunc({
+      locateFile: (path: string) => {
+        const baseUrl = plugin.url.substring(
+          0,
+          plugin.url.lastIndexOf("/") + 1,
+        );
+
+        return baseUrl + path;
+      },
+    });
+
+    moduleCache.set(plugin.id, moduleInstance);
+  } finally {
+    URL.revokeObjectURL(blobUrl);
   }
-
-  // Wasmインスタンス化
-  const moduleInstance = await factoryFunc({
-    locateFile: (path: string) => {
-      const baseUrl = plugin.url.substring(0, plugin.url.lastIndexOf("/") + 1);
-
-      return baseUrl + path;
-    },
-  });
-
-  moduleCache.set(plugin.id, moduleInstance);
 }
 
 async function runPlugin(
@@ -60,53 +59,17 @@ async function runPlugin(
   file: File,
 ): Promise<AnebetsuPluginResult> {
   const wasmModule = moduleCache.get(plugin.id) as WasmModule;
-
-  const arrayBuffer = await file.arrayBuffer();
-  const fileSize = arrayBuffer.byteLength;
-  const uint8Array = new Uint8Array(arrayBuffer);
   let jsonResult;
 
   if (wasmModule.process_file) {
-    const mountDir = `/work-${Date.now()}`; // 被らないようにユニークな名前で
-
-    try {
-      wasmModule.FS.mkdir(mountDir);
-    } catch (e) {
-      /* すでにあったら無視 */
-    }
-
-    wasmModule.FS.mount(
-      wasmModule.WORKERFS,
-      {
-        files: [file],
-      },
-      mountDir,
-    );
-
-    const filePath = `${mountDir}/${file.name}`;
-
-    jsonResult = wasmModule.process_file(filePath);
+    jsonResult = await process_file(wasmModule, file);
   } else if (wasmModule.process_binary) {
-    // Wasmメモリを確保 (malloc)
-    const ptr = wasmModule._malloc(fileSize);
-
-    try {
-      // 確保したメモリにファイルデータを書き込む
-      wasmModule.HEAPU8.set(uint8Array, ptr);
-
-      // C++関数を実行 (ポインタとサイズを渡す)
-      jsonResult = wasmModule.process_binary(ptr, fileSize);
-    } finally {
-      // 【重要】使い終わったメモリは必ず解放する
-      wasmModule._free(ptr);
-    }
+    jsonResult = await process_binary(wasmModule, file);
   } else if (wasmModule.process) {
-    const textData = new TextDecoder().decode(uint8Array);
-
-    jsonResult = wasmModule.process(textData);
+    jsonResult = await process_text(wasmModule, file);
   } else {
     throw new Error(
-      "Plugin does not have 'process' or 'process_binary' function.",
+      "Plugin does not have 'process', 'process_binary', or 'process_file' function.",
     );
   }
   const result = JSON.parse(jsonResult);

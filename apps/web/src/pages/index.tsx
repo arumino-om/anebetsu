@@ -63,7 +63,7 @@ export default function IndexPage() {
   useEffect(() => {
     workerRef.current = new Worker(
       new URL("../workers/file-processor.worker.ts", import.meta.url),
-      { type: "classic" },
+      { type: "module" },
     );
 
     workerRef.current.onmessage = (e) => {
