@@ -3,7 +3,7 @@ import type {
   AnebetsuWorkerMessage,
   Plugin,
 } from "../types/plugin";
-import type { WasmModule } from "./types";
+import type { WasmModule } from "../types/workers";
 
 import { process_binary } from "./processors/binary";
 import { process_file } from "./processors/file";

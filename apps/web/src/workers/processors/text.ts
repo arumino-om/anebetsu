@@ -1,4 +1,4 @@
-import { WasmModule } from "../types";
+import { WasmModule } from "../../types/workers";
 
 export async function process_text(
   wasmModule: WasmModule,

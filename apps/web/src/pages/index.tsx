@@ -13,41 +13,7 @@ import {
 import { CodeViewer } from "@/components/viewers/code-viewer";
 import { loadPluginsConfig } from "@/components/plugins-config";
 import { HexViewer } from "@/components/viewers/hex";
-import { FileNode } from "@/types/file-tree";
 import { FileTreeViewer } from "@/components/viewers/file-tree";
-
-const MOCK_ARCHIVE_DATA: FileNode = {
-  name: "root",
-  type: "directory",
-  children: [
-    { name: "README.md", type: "file", size: 1240 },
-    { name: "package.json", type: "file", size: 850 },
-    {
-      name: "src",
-      type: "directory",
-      children: [
-        { name: "main.cpp", type: "file", size: 4500 },
-        { name: "utils.ts", type: "file", size: 2300 },
-        {
-          name: "components",
-          type: "directory",
-          children: [
-            { name: "Header.tsx", type: "file", size: 1500 },
-            { name: "Footer.tsx", type: "file", size: 1200 },
-          ],
-        },
-      ],
-    },
-    {
-      name: "public",
-      type: "directory",
-      children: [
-        { name: "favicon.ico", type: "file", size: 15400 },
-        { name: "hero.png", type: "file", size: 245000 },
-      ],
-    },
-  ],
-};
 
 export default function IndexPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
